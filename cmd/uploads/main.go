@@ -16,6 +16,7 @@ func main() {
 
 	mux.HandleFunc("GET /{$}", serveUploadForm)
 	mux.HandleFunc("POST /upload", handleSingleFileUpload)
+	mux.HandleFunc("POST /upload-multiple", handleMultipleFileUpload)
 
 	log.Println("Server started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
@@ -53,6 +54,42 @@ func handleSingleFileUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "<p><a href=\"/\">Upload another file</a></p>")
+}
+
+func handleMultipleFileUpload(w http.ResponseWriter, r *http.Request) {
+	opts := uploads.FileUploadOptions{
+		DestinationDir:    "./uploads",
+		MaxSize:           5 * 1024 * 1024, // 5MB
+		AllowedExts:       []string{"jpg", "jpeg", "png", "gif", "pdf"},
+		RandomizeFilename: true,
+		FilenamePrefix:    "multi_",
+	}
+
+	savedFiles, err := uploads.SaveMultipleFormFiles(r, "files", &opts)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Upload failed: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, "<h2>%d files uploaded successfully!</h2>", len(savedFiles))
+
+	for i, file := range savedFiles {
+		fmt.Fprintf(w, "<h3>File %d</h3>", i+1)
+		fmt.Fprintf(w, "<p>Original name: %s</p>", file.OriginalName)
+		fmt.Fprintf(w, "<p>Saved as: %s</p>", file.SavedName)
+		fmt.Fprintf(w, "<p>Size: %d bytes</p>", file.Size)
+
+		// Display the image if it's an image
+		ext := filepath.Ext(file.SavedName)
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" {
+			fmt.Fprintf(w, "<p><img src=\"/files/%s\" style=\"max-width:200px;\"></p>", file.SavedName)
+		}
+
+		fmt.Fprintf(w, "<hr>")
+	}
+
+	fmt.Fprintf(w, "<p><a href=\"/\">Upload more files</a></p>")
 }
 
 func serveUploadForm(w http.ResponseWriter, r *http.Request) {
